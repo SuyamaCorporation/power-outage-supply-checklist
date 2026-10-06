@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Power Outage Emergency Supply Checklist</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .category-water { border-left-color: #3b82f6; }
+    .category-food { border-left-color: #22c55e; }
+    .category-medical { border-left-color: #ef4444; }
+    .category-lighting { border-left-color: #f59e0b; }
+    .category-communication { border-left-color: #8b5cf6; }
+    .stocked { background-color: #f0fdf4; }
+    .needed { background-color: #fff7ed; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-3xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="mb-8">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-4xl" aria-hidden="true">⚡</span>
+        <h1 class="text-3xl font-bold text-gray-800">Power Outage Emergency Supply Checklist</h1>
+      </div>
+      <p class="text-gray-500 text-sm">Stay prepared. Mark items as stocked or needed based on your household.</p>
+    </header>
+
+    <!-- Household config -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6" aria-labelledby="config-heading">
+      <h2 id="config-heading" class="text-lg font-semibold text-gray-700 mb-4">Household Settings</h2>
+      <div class="flex flex-wrap gap-6">
+        <div>
+          <label for="household-size" class="block text-sm font-medium text-gray-600 mb-1">Number of People</label>
+          <input id="household-size" type="number" min="1" max="20" value="2"
+            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-describedby="household-size-hint" />
+          <p id="household-size-hint" class="text-xs text-gray-400 mt-1">Including children</p>
+        </div>
+        <div>
+          <label for="outage-duration" class="block text-sm font-medium text-gray-600 mb-1">Outage Duration (days)</label>
+          <input id="outage-duration" type="number" min="1" max="30" value="3"
+            class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-describedby="outage-duration-hint" />
+          <p id="outage-duration-hint" class="text-xs text-gray-400 mt-1">Recommended: 3–7 days</p>
+        </div>
+        <div class="flex items-end">
+          <button id="calc-btn"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors"
+            aria-label="Calculate required quantities">
+            Calculate Quantities
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Refresh reminder -->
+    <section class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-start gap-3" aria-labelledby="reminder-heading">
+      <span class="text-2xl" aria-hidden="true">📅</span>
+      <div>
+        <h2 id="reminder-heading" class="text-sm font-semibold text-amber-800">Refresh Reminder</h2>
+        <p id="refresh-msg" class="text-xs text-amber-700 mt-0.5">Set your last-checked date to track when to refresh supplies.</p>
+        <div class="flex items-center gap-3 mt-2">
+          <label for="last-checked" class="text-xs text-amber-700 font-medium">Last checked:</label>
+          <input id="last-checked" type="date"
+            class="border border-amber-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+            aria-label="Last supply check date" />
+          <button id="save-date-btn"
+            class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-1 rounded transition-colors">
+            Save
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progress bar -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
+      <div class="flex justify-between items-center mb-2">
+        <span class="text-sm font-medium text-gray-700">Overall Preparedness</span>
+        <span id="progress-label" class="text-sm font-bold text-blue-600">0%</span>
+      </div>
+      <div class="w-full bg-gray-100 rounded-full h-3" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-bar-container">
+        <div id="progress-bar" class="bg-blue-500 h-3 rounded-full transition-all duration-500" style="width:0%"></div>
+      </div>
+      <p id="progress-summary" class="text-xs text-gray-400 mt-2">0 of 0 items stocked</p>
+    </div>
+
+    <!-- Checklist -->
+    <div id="checklist-container" class="space-y-6"></div>
+
+    <!-- Reset -->
+    <div class="mt-8 text-center">
+      <button id="reset-btn"
+        class="text-sm text-red-400 hover:text-red-600 underline transition-colors"
+        aria-label="Reset all checklist items to default">
+        Reset all items
+      </button>
+    </div>
+  </div>
+
+<script>
+const STORAGE_KEY = 'powerOutageChecklist_v1';
+const DATE_KEY = 'powerOutageLastChecked_v1';
+
+const ITEMS = [
+  // water
+  { id:'w1', cat:'water', label:'Bottled water', unit:'gallons', perPersonPerDay:1, min:1 },
+  { id:'w2', cat:'water', label:'Water purification tablets', unit:'pack', perPersonPerDay:0, min:1 },
+  { id:'w3', cat:'water', label:'Manual water filter (e.g., pump filter)', unit:'unit', perPersonPerDay:0, min:1 },
+  { id:'w4', cat:'water', label:'Collapsible water containers', unit:'unit', perPersonPerDay:0, min:2 },
+  // food
+  { id:'f1', cat:'food', label:'Canned goods (vegetables, beans, soup)', unit:'cans', perPersonPerDay:2, min:4 },
+  { id:'f2', cat:'food', label:'Shelf-stable protein (tuna, sardines)', unit:'cans', perPersonPerDay:1, min:2 },
+  { id:'f3', cat:'food', label:'Granola / energy bars', unit:'bars', perPersonPerDay:2, min:6 },
+  { id:'f4', cat:'food', label:'Peanut butter or nut butter', unit:'jar', perPersonPerDay:0, min:1 },
+  { id:'f5', cat:'food', label:'Crackers / shelf-stable bread', unit:'pack', perPersonPerDay:0, min:2 },
+  { id:'f6', cat:'food', label:'Manual can opener', unit:'unit', perPersonPerDay:0, min:1 },
+  { id:'f7', cat:'food', label:'Camp stove + fuel canisters', unit:'unit', perPersonPerDay:0, min:1 },
+  // medical
+  { id:'m1', cat:'medical', label:'First aid kit (bandages, antiseptic)', unit:'kit', perPersonPerDay:0, min:1 },
+  { id:'m2', cat:'medical', label:'Prescription medications (30-day supply)', unit:'supply', perPersonPerDay:0, min:1 },
+  { id:'m3', cat:'medical', label:'OTC pain reliever / fever reducer', unit:'bottle', perPersonPerDay:0, min:1 },
+  { id:'m4', cat:'medical', label:'Antihistamines / allergy meds', unit:'pack', perPersonPerDay:0, min:1 },
+  { id:'m5', cat:'medical', label:'Thermometer', unit:'unit', perPersonPerDay:0, min:1 },
+  { id:'m6', cat:'medical', label:'Disposable gloves', unit:'box', perPersonPerDay:0, min:1 },
+  // lighting
+  { id:'l1', cat:'lighting', label:'Flashlights', unit:'units', perPersonPerDay:0, min:2 },
+  { id:'l2', cat:'lighting', label:'Extra batteries (AA/AAA)', unit:'packs', perPersonPerDay:0, min:3 },
+  { id:'l3', cat:'lighting', label:'Battery-powered lantern', unit:'unit', perPersonPerDay:0, min:1 },
+  { id:'l4', cat:'lighting', label:'Candles + matches/lighter', unit:'set', perPersonPerDay:0, min:1 },
+  { id:'l5', cat:'lighting', label:'Headlamps', unit:'units', perPersonPerDay:0, min:2 },
+  { id:'l6', cat:'lighting', label:'Glow sticks (emergency markers)', unit:'pack', perPersonPerDay:0, min:1 },
+  // communication
+  { id:'c1', cat:'communication', label:'Battery-powered or hand-crank radio', unit:'unit', perPersonPerDay:0, min:1 },
+  { id:'c2', cat:'communication', label:'Fully charged power bank (10,000+ mAh)', unit:'unit', perPersonPerDay:0, min:1 },
+  { id:'c3', cat:'communication', label:'USB charging cables', unit:'set', perPersonPerDay:0, min:1 },
+  { id:'c4', cat:'communication', label:'Written emergency contact list', unit:'copy', perPersonPerDay:0, min:1 },
+  { id:'c5', cat:'communication', label:'Local area map (printed)', unit:'copy', perPersonPerDay:0, min:1 },
+  { id:'c6', cat:'communication', label:'Whistle (for signaling help)', unit:'unit', perPersonPerDay:0, min:1 },
+];
+
+const CATEGORIES = {
+  water:         { label:'Water',         icon:'💧', color:'blue' },
+  food:          { label:'Food & Cooking', icon:'🥫', color:'green' },
+  medical:       { label:'Medical',        icon:'🩺', color:'red' },
+  lighting:      { label:'Lighting',       icon:'🔦', color:'amber' },
+  communication: { label:'Communication',  icon:'📻', color:'purple' },
+};
+
+const COLOR_MAP = {
+  blue:   { badge:'bg-blue-100 text-blue-700',   border:'border-l-4 category-water',  btn:'bg-blue-500 hover:bg-blue-600' },
+  green:  { badge:'bg-green-100 text-green-700', border:'border-l-4 category-food',   btn:'bg-green-500 hover:bg-green-600' },
+  red:    { badge:'bg-red-100 text-red-700',     border:'border-l-4 category-medical',btn:'bg-red-500 hover:bg-red-600' },
+  amber:  { badge:'bg-amber-100 text-amber-700', border:'border-l-4 category-lighting',btn:'bg-amber-500 hover:bg-amber-600' },
+  purple: { badge:'bg-purple-100 text-purple-700',border:'border-l-4 category-communication',btn:'bg-purple-500 hover:bg-purple-600' },
+};
+
+let state = {};
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) state = JSON.parse(saved);
+  } catch(e) { state = {}; }
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function getQuantity(item, people, days) {
+  if (item.perPersonPerDay > 0) {
+    return Math.ceil(item.perPersonPerDay * people * days);
+  }
+  return item.min;
+}
+
+function updateProgress() {
+  const total = ITEMS.length;
+  const stocked = ITEMS.filter(i => state[i.id] === 'stocked').length;
+  const pct = total > 0 ? Math.round((stocked/total)*100) : 0;
+  const bar = document.getElementById('progress-bar');
+  const label = document.getElementById('progress-label');
+  const summary = document.getElementById('progress-summary');
+  const container = document.getElementById('progress-bar-container');
+  if (bar) {
+    bar.style.width = pct + '%';
+    bar.className = `h-3 rounded-full transition-all duration-500 ${pct === 100 ? 'bg-green-500' : pct >= 60 ? 'bg-blue-500' : 'bg-amber-500'}`;
+  }
+  if (label) label.textContent = pct + '%';
+  if (summary) summary.textContent = stocked + ' of ' + total + ' items stocked';
+  if (container) container.setAttribute('aria-valuenow', pct);
+}
+
+function renderChecklist() {
+  const people = parseInt(document.getElementById('household-size').value) || 2;
+  const days = parseInt(document.getElementById('outage-duration').value) || 3;
+  const container = document.getElementById('checklist-container');
+  container.innerHTML = '';
+
+  Object.entries(CATEGORIES).forEach(([catKey, catMeta]) => {
+    const c = COLOR_MAP[catMeta.color];
+    const items = ITEMS.filter(i => i.cat === catKey);
+
+    const section = document.createElement('section');
+    section.setAttribute('aria-labelledby', 'cat-heading-' + catKey);
+
+    const header = document.createElement('div');
+    header.className = 'flex items-center gap-2 mb-3';
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden','true');
+    icon.textContent = catMeta.icon;
+    icon.className = 'text-2xl';
+    const h2 = document.createElement('h2');
+    h2.id = 'cat-heading-' + catKey;
+    h2.className = 'text-lg font-bold text-gray-700';
+    h2.textContent = catMeta.label;
+    const badge = document.createElement('span');
+    badge.className = 'ml-auto text-xs px-2 py-0.5 rounded-full font-medium ' + c.badge;
+    const stockedCount = items.filter(i => state[i.id] === 'stocked').length;
+    badge.textContent = stockedCount + '/' + items.length + ' stocked';
+    badge.id = 'badge-' + catKey;
+    header.appendChild(icon); header.appendChild(h2); header.appendChild(badge);
+    section.appendChild(header);
+
+    const list = document.createElement('ul');
+    list.className = 'space-y-2';
+    list.setAttribute('role','list');
+
+    items.forEach(item => {
+      const status = state[item.id] || 'unset';
+      const qty = getQuantity(item, people, days);
+
+      const li = document.createElement('li');
+      li.className = `bg-white border ${c.border} rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm transition-all ${status==='stocked' ? 'stocked' : status==='needed' ? 'needed' : ''}`;
+
+      const info = document.createElement('div');
+      info.className = 'flex-1 min-w-0';
+      const labelEl = document.createElement('span');
+      labelEl.className = 'block text-sm font-medium text-gray-800';
+      labelEl.textContent = item.label;
+      const qtyEl = document.createElement('span');
+      qtyEl.className = 'block text-xs text-gray-400 mt-0.5';
+      qtyEl.textContent = 'Recommended: ' + qty + ' ' + item.unit;
+      info.appendChild(labelEl);
+      info.appendChild(qtyEl);
+
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'flex gap-2 flex-shrink-0';
+      btnGroup.setAttribute('role','group');
+      btnGroup.setAttribute('aria-label','Mark ' + item.label);
+
+      const stockBtn = document.createElement('button');
+      stockBtn.className = `px-3 py-1 rounded-lg text-xs font-medium transition-all ${status==='stocked' ? 'bg-green-500 text-white ring-2 ring-green-300' : 'bg-gray-100 text-gray-600 hover:bg-green-100'}`;
+      stockBtn.textContent = '✓ Stocked';
+      stockBtn.setAttribute('aria-pressed', status==='stocked' ? 'true' : 'false');
+      stockBtn.setAttribute('aria-label', 'Mark ' + item.label + ' as stocked');
+      stockBtn.addEventListener('click', () => {
+        state[item.id] = state[item.id] === 'stocked' ? 'unset' : 'stocked';
+        saveState(); renderChecklist(); updateProgress();
+      });
+
+      const needBtn = document.createElement('button');
+      needBtn.className = `px-3 py-1 rounded-lg text-xs font-medium transition-all ${status==='needed' ? 'bg-orange-500 text-white ring-2 ring-orange-300' : 'bg-gray-100 text-gray-600 hover:bg-orange-100'}`;
+      needBtn.textContent = '! Needed';
+      needBtn.setAttribute('aria-pressed', status==='needed' ? 'true' : 'false');
+      needBtn.setAttribute('aria-label', 'Mark ' + item.label + ' as needed');
+      needBtn.addEventListener('click', () => {
+        state[item.id] = state[item.id] === 'needed' ? 'unset' : 'needed';
+        saveState(); renderChecklist(); updateProgress();
+      });
+
+      btnGroup.appendChild(stockBtn);
+      btnGroup.appendChild(needBtn);
+
+      li.appendChild(info);
+      li.appendChild(btnGroup);
+      list.appendChild(li);
+    });
+
+    section.appendChild(list);
+    container.appendChild(section);
+  });
+
+  updateProgress();
+}
+
+// Refresh reminder
+function checkRefreshDate() {
+  try {
+    const saved = localStorage.getItem(DATE_KEY);
+    if (saved) {
+      document.getElementById('last-checked').value = saved;
+      const last = new Date(saved);
+      const now = new Date();
+      const diffDays = Math.floor((now - last) / 86400000);
+      const msg = document.getElementById('refresh-msg');
+      if (diffDays > 180) {
+        msg.textContent = '⚠️ It has been ' + diffDays + ' days since your last check. Please review your supplies!';
+        msg.className = 'text-xs text-red-700 mt-0.5 font-semibold';
+      } else if (diffDays > 90) {
+        msg.textContent = 'It has been ' + diffDays + ' days since your last check. Consider reviewing soon.';
+        msg.className = 'text-xs text-amber-700 mt-0.5';
+      } else {
+        msg.textContent = diffDays + ' days since last check. You are up to date!';
+        msg.className = 'text-xs text-green-700 mt-0.5';
+      }
+    }
+  } catch(e) {}
+}
+
+document.getElementById('save-date-btn').addEventListener('click', () => {
+  const val = document.getElementById('last-checked').value;
+  if (val) {
+    try { localStorage.setItem(DATE_KEY, val); } catch(e) {}
+    checkRefreshDate();
+  }
+});
+
+document.getElementById('calc-btn').addEventListener('click', renderChecklist);
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (confirm('Reset all items? This cannot be undone.')) {
+    state = {};
+    saveState();
+    renderChecklist();
+  }
+});
+
+// Init
+loadState();
+checkRefreshDate();
+renderChecklist();
+</script>
+</body>
+</html>
